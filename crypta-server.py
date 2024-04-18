@@ -1,10 +1,12 @@
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from datetime import datetime
 import csv
 import asyncio
 import threading
 from uvicorn import Config, Server
 import paho.mqtt.client as mqtt
+
 
 app = FastAPI()
 csv_file_name = 'record.csv'
@@ -15,7 +17,7 @@ def format_data(location, value):
     now = datetime.now()
     datetime_str = now.strftime("%Y-%m-%d %H:%M:%S")
     parts = datetime_str.split()
-    return {"location": location, "date": parts[0], "time": parts[1], "value": value}
+    return [location, parts[0], parts[1], value]
 
 # Function to save data to CSV
 def save_to_csv(data):
@@ -32,9 +34,9 @@ def on_message(client, userdata, msg):
     data = msg.payload.decode()
     parts = data.split()
     if len(parts) >= 2:
-        formatted_data = format_data(parts[0], float(parts[1]))
+        formatted_data = format_data(parts[0], parts[1])
         print("Formatted data is: {}".format(formatted_data))
-        save_to_csv([formatted_data["location"], formatted_data["value"]])
+        save_to_csv(formatted_data)
         print(f"Data saved to CSV: {formatted_data}")
 
 client = mqtt.Client()
@@ -61,32 +63,27 @@ async def startup_event():
 def shutdown_event():
     print("FastAPI server and MQTT client are shutting down")
 
-# Background task to continuously send data to the /data endpoint
-def send_data(background_tasks: BackgroundTasks):
+# Endpoint to read data from CSV, calculate average, and return as JSON
+@app.get("/data")
+async def get_data():
     global mqtt_data
     batch_size = 15
-    while True:
-        with open(csv_file_name, 'r') as file:
-            reader = csv.reader(file)
-            for row in reader:
-                mqtt_data.append(float(row[1]))  # Assuming value is at index 1
-                if len(mqtt_data) == batch_size:
-                    average_value = sum(mqtt_data) / len(mqtt_data)
-                    location = row[0]  # Assuming location is at index 0
-                    mqtt_data = []
-                    data = {"location": location, "average_water_level": average_value}
-                    background_tasks.add_task(send_data_task, data)
-            if mqtt_data:  # If there's remaining data less than batch size
+    with open(csv_file_name, 'r') as file:
+        reader = csv.reader(file)
+        for row in reader:
+            mqtt_data.append(float(row[3]))  # Assuming water_level is at index 3
+            if len(mqtt_data) == batch_size:
                 average_value = sum(mqtt_data) / len(mqtt_data)
                 location = row[0]  # Assuming location is at index 0
                 mqtt_data = []
-                data = {"location": location, "average_water_level": average_value}
-                background_tasks.add_task(send_data_task, data)
-
-# Background task to send data to the /data endpoint
-async def send_data_task(data):
-    await asyncio.sleep(10)  # Wait for 10 seconds before sending data
-    print("Sending data:", data)  # Replace this with your code to send data to the /data endpoint
+                return {"location": location, "average_water_level": average_value}
+        if mqtt_data:  # If there's remaining data less than batch size
+            average_value = sum(mqtt_data) / len(mqtt_data)
+            location = row[0]  # Assuming location is at index 0
+            mqtt_data = []
+            return {"location": location, "average_water_level": average_value}
+        else:
+            return {"message": "No data available"}
 
 # Root endpoint
 @app.get("/")
