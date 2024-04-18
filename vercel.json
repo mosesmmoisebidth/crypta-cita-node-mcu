@@ -1,3 +1,19 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/crypta-mqtt-server/crypta-server" }]
+  "devCommand": "uvicorn mqtt-code.crypta-server:app --host 127.0.0.1 --port 8001",
+  "builds": [
+    {
+      "src": "mqtt-code/crypta-server.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/data",
+      "dest": "/api/data"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "mqtt-code/crypta-server.py"
+    }
+  ]
 }
