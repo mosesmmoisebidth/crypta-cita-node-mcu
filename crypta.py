@@ -19,6 +19,15 @@ sio = socketio.AsyncServer(
     engineio_logger=True
 )
 
+app = FastAPI(
+    title="Crypta-Vita",
+    version="2.15",
+    description="Data Streaming",
+    openapi_url="/openapi.json",
+    docs_url="/swagger",
+    redoc_url="/docs",
+)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -69,7 +78,7 @@ def on_message(client, userdata, msg):
             print("the data that is going to be saved is: {}".format(saving_data))
             asyncio.run_coroutine_threadsafe(async_emit('data', saving_data), global_event_loop)
             save_data_to_file("received.txt", saving_data)
-        if int((datetime.datetime.now() - start_time).total_seconds()) >= 15:
+        if int((datetime.datetime.now() - start_time).total_seconds()) >= 360:
             if len(parts) >= 2:
                 current_location = parts[0]
                 current_value = parts[1]
@@ -86,11 +95,14 @@ def on_message(client, userdata, msg):
         print("An Exception occured as: {}".format(e))
 
 async def initiate_connection():
-    client = mqtt.Client()
-    client.on_connect = on_connect
-    client.on_message = on_message
-    client.connect("82.165.97.169", 1883, 60)
-    client.loop_start()
+    try:
+        client = mqtt.Client()
+        client.on_connect = on_connect
+        client.on_message = on_message
+        client.connect("82.165.97.169", 1883, 60)
+        client.loop_start()
+    except Exception as e:
+        print(f"An Error occured {e}")
 @app.get("/", tags=["Default"])
 async def handle_default():
     return JSONResponse(status_code=200, content={"message": "Real Time Sensor Data"})

@@ -28,13 +28,13 @@ async def disconnect():
 
 @sio.event
 async def data(data):
-    print("the received data is: {}".format(data))
+    print(data)
 
 async def handle_connection():
     try:
-        await sio.connect("http://127.0.0.1:8001", namespaces=["/"])
+        await sio.connect("https://crypta-vita.onrender.com", namespaces=["/"])
         await sio.wait()
-    except Exception as e:
+    except socketio.exceptions.ConnectionError as e:
         print("An Exception occured: {}".format(e))
 
 @app.on_event("startup")
@@ -52,7 +52,6 @@ async def handle_startup():
 @app.on_event("shutdown")
 async def handle_shutdown():
     print("SERVER STOPPED RUNNING")
-
 
 if __name__ == '__main__':
     config = Config(app, host="127.0.0.1", port=8002, reload=True)
